@@ -48,7 +48,7 @@ func getKeys(c *cli.Context) (privkey, pubkey *key, err error) {
 	privkey, err = newKeyFromString(privkeyStr)
 
 	// pubkey
-	pubkeyStr := c.String("pubey")
+	pubkeyStr := c.String("pubkey")
 	if pubkeyStr == "" {
 		pubkeyStr = os.Getenv("PEPPER_PUBLIC_KEY")
 	}
@@ -197,6 +197,8 @@ var decmsg = cli.Command{
 		// get keys
 		privkey, pubkey, err := getKeys(c)
 		handelErr(err)
+
+		println(pubkey.String())
 
 		// nonce
 		nonceStr := c.String("nonce")

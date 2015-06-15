@@ -96,7 +96,6 @@ var generateKey = cli.Command{
 					flagSaveInHomeDir = false
 				}
 			}
-
 		}
 
 		if flagSaveInHomeDir {
@@ -155,7 +154,7 @@ var encmsg = cli.Command{
 				handleErr(err)
 				msg = append([]byte{b}, msg...)
 			case <-time.After(time.Millisecond * 10):
-				// black hole
+				// some kind of magic happens here
 			}
 
 		}

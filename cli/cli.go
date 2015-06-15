@@ -2,6 +2,7 @@ package main
 
 import (
 	//"bufio"
+	"bufio"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -9,16 +10,16 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/user"
 	"path"
 	"time"
 
 	"github.com/codegangsta/cli"
-	"golang.org/x/crypto/nacl/box"
 
 	"github.com/toorop/pepper"
 )
 
-func handelErr(err error) {
+func handleErr(err error) {
 	if err != nil {
 		dieError(err.Error())
 	}
@@ -29,6 +30,10 @@ func dieError(msg string) {
 	os.Exit(1)
 }
 
+// getKeys returns keys used for enc/dec from:
+// - cmd line option
+// - environment vars
+// - ~/.pepper/private.key /.pepper/public.key
 func getKeys(c *cli.Context) (privkey, pubkey *pepper.Key, err error) {
 	privkeyStr := c.String("privkey")
 	if privkeyStr == "" {
@@ -56,8 +61,48 @@ var generateKey = cli.Command{
 	Name:  "genkey",
 	Usage: "Create new set of keys",
 	Action: func(c *cli.Context) {
-		pub, priv, err := box.GenerateKey(rand.Reader)
-		handelErr(err)
+		pub, priv, err := pepper.GenerateKey(rand.Reader)
+		handleErr(err)
+
+		// save in ~/.pepper/key.priv|pub ?
+		flagSaveInHomeDir := false
+		u, err := user.Current()
+		handleErr(err)
+		var r []byte
+		for {
+			fmt.Printf("Would you like to save keys as your keys in %s/.pepper ? (y/n) :", u.HomeDir)
+			r, _, _ = bufio.NewReader(os.Stdin).ReadLine()
+			if r[0] == 110 || r[0] == 121 {
+				break
+			}
+		}
+		if r[0] == 121 {
+			flagSaveInHomeDir = true
+			// Key exist
+			_, err := os.Stat(path.Join(u.HomeDir, ".pepper/key.priv"))
+			if err != nil && err != os.ErrNotExist {
+				handleErr(err)
+			}
+			// keyring exists
+			if err == nil {
+				for {
+					print("You already have a keyring recorded. Would you really like to replace it ? (y/n) :")
+					r, _, _ = bufio.NewReader(os.Stdin).ReadLine()
+					if r[0] == 110 || r[0] == 121 {
+						break
+					}
+				}
+				if r[0] == 110 {
+					flagSaveInHomeDir = false
+				}
+			}
+
+		}
+
+		if flagSaveInHomeDir {
+			err = pepper.SaveKeysInHomeDir(pub, priv)
+			handleErr(err)
+		}
 
 		pubKey := &pepper.Key{
 			Raw: *pub,
@@ -66,10 +111,6 @@ var generateKey = cli.Command{
 		privKey := &pepper.Key{
 			Raw: *priv,
 		}
-
-		os.Clearenv()
-		os.Setenv("PEPPER_PRIVATE_KEY", privKey.String())
-		os.Setenv("PEPPER_PUBLIC_KEY", pubKey.String())
 
 		fmt.Printf("Private key: %s\n", privKey)
 		fmt.Printf("Public key: %s\n", pubKey)
@@ -105,13 +146,13 @@ var encmsg = cli.Command{
 			go func() {
 				b := make([]byte, 1)
 				_, err := os.Stdin.Read(b)
-				handelErr(err)
+				handleErr(err)
 				c <- b[0]
 			}()
 			select {
 			case b := <-c:
 				msg, err = ioutil.ReadAll(os.Stdin)
-				handelErr(err)
+				handleErr(err)
 				msg = append([]byte{b}, msg...)
 			case <-time.After(time.Millisecond * 10):
 				// black hole
@@ -125,16 +166,16 @@ var encmsg = cli.Command{
 
 		// get keys
 		privkey, pubkey, err := getKeys(c)
-		handelErr(err)
+		handleErr(err)
 
 		//println(pubkey.String())
 
 		// New nonce
 		nonce := new([24]byte)
 		_, err = io.ReadFull(rand.Reader, nonce[:])
-		handelErr(err)
+		handleErr(err)
 		out := []byte{}
-		out = box.Seal(out, msg, nonce, &pubkey.Raw, &privkey.Raw)
+		out = pepper.BoxSeal(out, msg, nonce, &pubkey.Raw, &privkey.Raw)
 		n := []byte{}
 		for _, b := range *nonce {
 			n = append(n, b)
@@ -172,11 +213,11 @@ var decmsg = cli.Command{
 
 		// encrypted message
 		encrypted, err := base64.StdEncoding.DecodeString(c.Args().First())
-		handelErr(err)
+		handleErr(err)
 
 		// get keys
 		privkey, pubkey, err := getKeys(c)
-		handelErr(err)
+		handleErr(err)
 
 		//println(pubkey.String())
 
@@ -186,13 +227,13 @@ var decmsg = cli.Command{
 			panic(errors.New("No nonce specified"))
 		}
 		nonceb, err := base64.StdEncoding.DecodeString(nonceStr)
-		handelErr(err)
+		handleErr(err)
 		nonce := new([24]byte)
 		for i, b := range nonceb {
 			nonce[i] = b
 		}
 		out := []byte{}
-		r, _ := box.Open(out, encrypted, nonce, &pubkey.Raw, &privkey.Raw)
+		r, _ := pepper.BoxOpen(out, encrypted, nonce, &pubkey.Raw, &privkey.Raw)
 		fmt.Printf("%s\n", string(r))
 	},
 }
@@ -244,19 +285,19 @@ var encfile = cli.Command{
 
 		// get keys
 		privkey, pubkey, err := getKeys(c)
-		handelErr(err)
+		handleErr(err)
 
 		// New nonce
 		nonce := new([24]byte)
 		_, err = io.ReadFull(rand.Reader, nonce[:])
-		handelErr(err)
+		handleErr(err)
 
 		outb := []byte{}
 		inb, err := ioutil.ReadFile(in)
-		handelErr(err)
+		handleErr(err)
 
-		outb = box.Seal(outb, inb, nonce, &pubkey.Raw, &privkey.Raw)
-		handelErr(ioutil.WriteFile(out, outb, 0644))
+		outb = pepper.BoxSeal(outb, inb, nonce, &pubkey.Raw, &privkey.Raw)
+		handleErr(ioutil.WriteFile(out, outb, 0644))
 
 		n := []byte{}
 		for _, b := range *nonce {
@@ -303,7 +344,7 @@ var decfile = cli.Command{
 			dieError("You must provide a nonce\npepper decfile -i FILE_TO_ENCRYPT -n NONCE [-o OUTPUT_FILE]")
 		}
 		nonceb, err := base64.StdEncoding.DecodeString(nonceStr)
-		handelErr(err)
+		handleErr(err)
 		nonce := new([24]byte)
 		for i, b := range nonceb {
 			nonce[i] = b
@@ -329,14 +370,14 @@ var decfile = cli.Command{
 
 		// get keys
 		privkey, pubkey, err := getKeys(c)
-		handelErr(err)
+		handleErr(err)
 
 		inb, err := ioutil.ReadFile(in)
-		handelErr(err)
+		handleErr(err)
 
 		outb := []byte{}
-		outb, _ = box.Open(outb, inb, nonce, &pubkey.Raw, &privkey.Raw)
-		handelErr(ioutil.WriteFile(out, outb, 0644))
+		outb, _ = pepper.BoxOpen(outb, inb, nonce, &pubkey.Raw, &privkey.Raw)
+		handleErr(ioutil.WriteFile(out, outb, 0644))
 
 		println("Decrypted file saved as: " + out)
 	},

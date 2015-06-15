@@ -392,7 +392,7 @@ func main() {
 	app.Usage = "repellent for black boxes"
 	app.Author = "Stéphane Depierrepont aka toorop"
 	app.Email = "toorop@toorop.fr"
-	app.Version = "0.0.6"
+	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
 		generateKey,
 		encmsg,
@@ -401,6 +401,7 @@ func main() {
 		decfile,
 		sendmsg,
 		getmsg,
+		//gui,
 	}
 	app.Action = func(c *cli.Context) {
 		println("go")

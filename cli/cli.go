@@ -12,14 +12,11 @@ import (
 	"path"
 	"time"
 
+	"github.com/codegangsta/cli"
 	"golang.org/x/crypto/nacl/box"
 
-	"github.com/codegangsta/cli"
+	"github.com/toorop/pepper"
 )
-
-type key struct {
-	raw [32]byte
-}
 
 func handelErr(err error) {
 	if err != nil {
@@ -32,18 +29,7 @@ func dieError(msg string) {
 	os.Exit(1)
 }
 
-func (k *key) String() string {
-	if k.raw == [32]byte{} {
-		return ""
-	}
-	t := []byte{}
-	for _, b := range k.raw {
-		t = append(t, b)
-	}
-	return base64.StdEncoding.EncodeToString(t)
-}
-
-func getKeys(c *cli.Context) (privkey, pubkey *key, err error) {
+func getKeys(c *cli.Context) (privkey, pubkey *pepper.Key, err error) {
 	privkeyStr := c.String("privkey")
 	if privkeyStr == "" {
 		privkeyStr = os.Getenv("PEPPER_PRIVATE_KEY")
@@ -51,7 +37,7 @@ func getKeys(c *cli.Context) (privkey, pubkey *key, err error) {
 	if privkeyStr == "" {
 		return nil, nil, errors.New("No private key found")
 	}
-	privkey, err = newKeyFromString(privkeyStr)
+	privkey, err = pepper.KeyFromString(privkeyStr)
 
 	// pubkey
 	pubkeyStr := c.String("pubkey")
@@ -61,22 +47,8 @@ func getKeys(c *cli.Context) (privkey, pubkey *key, err error) {
 	if pubkeyStr == "" {
 		return nil, nil, errors.New("No public key found")
 	}
-	pubkey, err = newKeyFromString(pubkeyStr)
+	pubkey, err = pepper.KeyFromString(pubkeyStr)
 	return
-}
-
-// newKeyFromString return key struct from string
-func newKeyFromString(kstr string) (*key, error) {
-	//r:=[32]byte{}
-	kb, err := base64.StdEncoding.DecodeString(kstr)
-	if err != nil {
-		panic(err)
-	}
-	k := &key{}
-	for i, b := range kb {
-		k.raw[i] = b
-	}
-	return k, nil
 }
 
 // generateKey generate a new set of key
@@ -87,12 +59,12 @@ var generateKey = cli.Command{
 		pub, priv, err := box.GenerateKey(rand.Reader)
 		handelErr(err)
 
-		pubKey := &key{
-			raw: *pub,
+		pubKey := &pepper.Key{
+			Raw: *pub,
 		}
 
-		privKey := &key{
-			raw: *priv,
+		privKey := &pepper.Key{
+			Raw: *priv,
 		}
 
 		os.Clearenv()
@@ -162,7 +134,7 @@ var encmsg = cli.Command{
 		_, err = io.ReadFull(rand.Reader, nonce[:])
 		handelErr(err)
 		out := []byte{}
-		out = box.Seal(out, msg, nonce, &pubkey.raw, &privkey.raw)
+		out = box.Seal(out, msg, nonce, &pubkey.Raw, &privkey.Raw)
 		n := []byte{}
 		for _, b := range *nonce {
 			n = append(n, b)
@@ -220,7 +192,7 @@ var decmsg = cli.Command{
 			nonce[i] = b
 		}
 		out := []byte{}
-		r, _ := box.Open(out, encrypted, nonce, &pubkey.raw, &privkey.raw)
+		r, _ := box.Open(out, encrypted, nonce, &pubkey.Raw, &privkey.Raw)
 		fmt.Printf("%s\n", string(r))
 	},
 }
@@ -283,7 +255,7 @@ var encfile = cli.Command{
 		inb, err := ioutil.ReadFile(in)
 		handelErr(err)
 
-		outb = box.Seal(outb, inb, nonce, &pubkey.raw, &privkey.raw)
+		outb = box.Seal(outb, inb, nonce, &pubkey.Raw, &privkey.Raw)
 		handelErr(ioutil.WriteFile(out, outb, 0644))
 
 		n := []byte{}
@@ -363,19 +335,10 @@ var decfile = cli.Command{
 		handelErr(err)
 
 		outb := []byte{}
-		outb, _ = box.Open(outb, inb, nonce, &pubkey.raw, &privkey.raw)
+		outb, _ = box.Open(outb, inb, nonce, &pubkey.Raw, &privkey.Raw)
 		handelErr(ioutil.WriteFile(out, outb, 0644))
 
 		println("Decrypted file saved as: " + out)
-	},
-}
-
-// GUI (http server
-var gui = cli.Command{
-	Name:  "gui",
-	Usage: "Launch HTTP GUI server (http(s)://localhost:6480) ", // = 108 * 60 & 108 = 4 + 8 + 15 + 16 + 23 + 42
-	Action: func(c *cli.Context) {
-		launchGui()
 	},
 }
 
@@ -392,11 +355,6 @@ func main() {
 		decmsg,
 		encfile,
 		decfile,
-		gui,
 	}
-	app.Action = func(c *cli.Context) {
-		println("go")
-	}
-
 	app.Run(os.Args)
 }

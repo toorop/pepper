@@ -2,6 +2,7 @@ package pepper
 
 import (
 	"encoding/base64"
+	"errors"
 	"io/ioutil"
 	"os"
 	"os/user"
@@ -10,7 +11,8 @@ import (
 
 // Key represent a key
 type Key struct {
-	Raw [32]byte
+	Raw  [32]byte
+	Type string
 }
 
 // KeyFromString return key struct from string
@@ -27,6 +29,28 @@ func KeyFromString(kstr string) (*Key, error) {
 	return k, nil
 }
 
+// GetUserKeyFromHomeDir returns public or private key of current user loade from his home dir
+func KeyFromHomeDir(puborpriv string) (key *Key, err error) {
+	if puborpriv != "private" && puborpriv != "public" {
+		return nil, errors.New("GetUserKeyFromHome params must be 'private' or 'public'. " + puborpriv + " given.")
+	}
+	u, err := user.Current()
+	if err != nil {
+		return nil, err
+	}
+	// load public key
+	k, err := ioutil.ReadFile(path.Join(u.HomeDir, ".pepper", "key."+puborpriv))
+	if err != nil {
+		return nil, err
+	}
+
+	raw := [32]byte{}
+	for i := 0; i < 32; i++ {
+		raw[i] = k[i]
+	}
+	return &Key{Raw: raw}, nil
+}
+
 // String return key as base64 encoded string
 func (k *Key) String() string {
 	if k.Raw == [32]byte{} {
@@ -39,8 +63,8 @@ func (k *Key) String() string {
 	return base64.StdEncoding.EncodeToString(t)
 }
 
-// SaveKeysInHomeDir save keys from current user home dir
-func SaveKeysInHomeDir(pub, priv *[32]byte) error {
+// SaveInHomeDir save key in home dir
+func (k *Key) SaveInHomeDir() error {
 	u, err := user.Current()
 	if err != nil {
 		return err
@@ -52,16 +76,5 @@ func SaveKeysInHomeDir(pub, priv *[32]byte) error {
 			return err
 		}
 	}
-	// save pub key
-	p := *pub
-	if err = ioutil.WriteFile(path.Join(pepperDir, "key.pub"), p[:], 0600); err != nil {
-		return err
-	}
-
-	// save pivate key
-	p = *priv
-	if err = ioutil.WriteFile(path.Join(pepperDir, "key.priv"), p[:], 0600); err != nil {
-		return err
-	}
-	return nil
+	return ioutil.WriteFile(path.Join(pepperDir, "key."+k.Type), k.Raw[:], 0600)
 }

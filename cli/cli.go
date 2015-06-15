@@ -39,10 +39,16 @@ func getKeys(c *cli.Context) (privkey, pubkey *pepper.Key, err error) {
 	if privkeyStr == "" {
 		privkeyStr = os.Getenv("PEPPER_PRIVATE_KEY")
 	}
-	if privkeyStr == "" {
+	if privkeyStr != "" {
+		privkey, err = pepper.KeyFromString(privkeyStr)
+		handleErr(err)
+	} else {
+		// From homedir
+		privkey, err = pepper.KeyFromHomeDir("private")
+	}
+	if privkey == nil {
 		return nil, nil, errors.New("No private key found")
 	}
-	privkey, err = pepper.KeyFromString(privkeyStr)
 
 	// pubkey
 	pubkeyStr := c.String("pubkey")
@@ -65,55 +71,34 @@ var generateKey = cli.Command{
 		handleErr(err)
 
 		// save in ~/.pepper/key.priv|pub ?
-		flagSaveInHomeDir := false
 		u, err := user.Current()
 		handleErr(err)
 		var r []byte
+
+		pubKey := &pepper.Key{
+			Raw:  *pub,
+			Type: "public",
+		}
+
+		privKey := &pepper.Key{
+			Raw:  *priv,
+			Type: "private",
+		}
+
+		fmt.Printf("Private key: %s\n", privKey)
+		fmt.Printf("Public key: %s\n", pubKey)
+
 		for {
-			fmt.Printf("Would you like to save keys as your keys in %s/.pepper ? (y/n) :", u.HomeDir)
+			fmt.Printf("Would you like to save keys as your keys in %s/.pepper ?\nWarning if keys exists they will be replaced (y/n) :", u.HomeDir)
 			r, _, _ = bufio.NewReader(os.Stdin).ReadLine()
 			if r[0] == 110 || r[0] == 121 {
 				break
 			}
 		}
 		if r[0] == 121 {
-			flagSaveInHomeDir = true
-			// Key exist
-			_, err := os.Stat(path.Join(u.HomeDir, ".pepper/key.priv"))
-			if err != nil && err != os.ErrNotExist {
-				handleErr(err)
-			}
-			// keyring exists
-			if err == nil {
-				for {
-					print("You already have a keyring recorded. Would you really like to replace it ? (y/n) :")
-					r, _, _ = bufio.NewReader(os.Stdin).ReadLine()
-					if r[0] == 110 || r[0] == 121 {
-						break
-					}
-				}
-				if r[0] == 110 {
-					flagSaveInHomeDir = false
-				}
-			}
+			handleErr(pubKey.SaveInHomeDir())
+			handleErr(privKey.SaveInHomeDir())
 		}
-
-		if flagSaveInHomeDir {
-			err = pepper.SaveKeysInHomeDir(pub, priv)
-			handleErr(err)
-		}
-
-		pubKey := &pepper.Key{
-			Raw: *pub,
-		}
-
-		privKey := &pepper.Key{
-			Raw: *priv,
-		}
-
-		fmt.Printf("Private key: %s\n", privKey)
-		fmt.Printf("Public key: %s\n", pubKey)
-
 	},
 }
 

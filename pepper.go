@@ -370,19 +370,12 @@ var decfile = cli.Command{
 	},
 }
 
-// sendMsg TODO
-var sendmsg = cli.Command{
-	Name:  "sendmsg",
-	Usage: "Send message (or file, or ...) to public key address",
+// GUI (http server
+var gui = cli.Command{
+	Name:  "gui",
+	Usage: "Launch HTTP GUI server (http(s)://localhost:6480) ", // = 108 * 60 & 108 = 4 + 8 + 15 + 16 + 23 + 42
 	Action: func(c *cli.Context) {
-	},
-}
-
-// getMsg TODO
-var getmsg = cli.Command{
-	Name:  "getmsg",
-	Usage: "Retrieve & decode message (or file, or ...)",
-	Action: func(c *cli.Context) {
+		launchGui()
 	},
 }
 
@@ -399,9 +392,7 @@ func main() {
 		decmsg,
 		encfile,
 		decfile,
-		sendmsg,
-		getmsg,
-		//gui,
+		gui,
 	}
 	app.Action = func(c *cli.Context) {
 		println("go")

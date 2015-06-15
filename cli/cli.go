@@ -45,6 +45,7 @@ func getKeys(c *cli.Context) (privkey, pubkey *pepper.Key, err error) {
 	} else {
 		// From homedir
 		privkey, err = pepper.KeyFromHomeDir("private")
+		handleErr(err)
 	}
 	if privkey == nil {
 		return nil, nil, errors.New("No private key found")
@@ -55,14 +56,50 @@ func getKeys(c *cli.Context) (privkey, pubkey *pepper.Key, err error) {
 	if pubkeyStr == "" {
 		pubkeyStr = os.Getenv("PEPPER_PUBLIC_KEY")
 	}
-	if pubkeyStr == "" {
-		return nil, nil, errors.New("No public key found")
+	if pubkeyStr != "" {
+		pubkey, err = pepper.KeyFromString(pubkeyStr)
+		handleErr(err)
+	} else {
+		// From homedir
+		pubkey, err = pepper.KeyFromHomeDir("public")
+		handleErr(err)
 	}
-	pubkey, err = pepper.KeyFromString(pubkeyStr)
 	return
 }
 
-// generateKey generate a new set of key
+// getInput return input in the order below
+// - from command line
+// - from stdin
+func getInput(c *cli.Context) (*[]byte, error) {
+	var err error
+	input := []byte(c.Args().First())
+	if len(input) == 0 {
+		// try stdin
+		// timeout on read
+		// if nothing to raise.
+		c := make(chan byte, 1)
+		go func() {
+			b := make([]byte, 1)
+			_, err := os.Stdin.Read(b)
+			handleErr(err)
+			c <- b[0]
+		}()
+		select {
+		case b := <-c:
+			input, err = ioutil.ReadAll(os.Stdin)
+			if err != nil {
+				return nil, err
+			}
+			input = append([]byte{b}, input...)
+		case <-time.After(time.Millisecond * 10):
+			println("timeout")
+			// some kind of magic happens here
+		}
+	}
+	return &input, nil
+}
+
+// generateKey generates a new set of key
 var generateKey = cli.Command{
 	Name:  "genkey",
 	Usage: "Create new set of keys",
@@ -121,51 +158,20 @@ var encmsg = cli.Command{
 	Action: func(c *cli.Context) {
 		var err error
 		// message to be encrypted
-		msg := []byte(c.Args().First())
-		if len(msg) == 0 {
-			// try stdin
-			// timeout on read
-			// if nothing to raise.
-			c := make(chan byte, 1)
-			go func() {
-				b := make([]byte, 1)
-				_, err := os.Stdin.Read(b)
-				handleErr(err)
-				c <- b[0]
-			}()
-			select {
-			case b := <-c:
-				msg, err = ioutil.ReadAll(os.Stdin)
-				handleErr(err)
-				msg = append([]byte{b}, msg...)
-			case <-time.After(time.Millisecond * 10):
-				// some kind of magic happens here
-			}
-
-		}
-		if len(msg) == 0 {
+		msg, err := getInput(c)
+		handleErr(err)
+		if len(*msg) == 0 {
 			println("Nothing to encrypt\n pepper encmsg " + `"message to encrypt"` + "\nor\n echo " + `"message to encrypt"` + " | pepper encmsg" + "\nor\n cat file.txt | pepper encmsg")
 			os.Exit(1)
 		}
-
 		// get keys
-		privkey, pubkey, err := getKeys(c)
+		privKey, pubKey, err := getKeys(c)
 		handleErr(err)
 
-		//println(pubkey.String())
-
-		// New nonce
-		nonce := new([24]byte)
-		_, err = io.ReadFull(rand.Reader, nonce[:])
+		encrypted, err := pepper.EncryptMsg(*msg, pubKey, privKey)
 		handleErr(err)
-		out := []byte{}
-		out = pepper.BoxSeal(out, msg, nonce, &pubkey.Raw, &privkey.Raw)
-		n := []byte{}
-		for _, b := range *nonce {
-			n = append(n, b)
-		}
 
-		fmt.Printf("Nonce: %s\nEncrypted:\n%s\n", base64.StdEncoding.EncodeToString(n), base64.StdEncoding.EncodeToString(out))
+		println(encrypted)
 
 	},
 }
@@ -191,34 +197,19 @@ var decmsg = cli.Command{
 		},
 	},
 	Action: func(c *cli.Context) {
-		if len(c.Args()) != 1 {
-			panic(errors.New("no message to decrypt"))
-		}
-
-		// encrypted message
-		encrypted, err := base64.StdEncoding.DecodeString(c.Args().First())
+		msg, err := getInput(c)
 		handleErr(err)
+		if len(*msg) == 0 {
+			println("Nothing to decrypt\n pepper decmsg " + `"message to encrypt"` + "\nor\n echo " + `"message to decrypt"` + " | pepper decmsg" + "\nor\n cat file.txt | pepper decmsg")
+			os.Exit(1)
+		}
 
 		// get keys
-		privkey, pubkey, err := getKeys(c)
+		privKey, pubKey, err := getKeys(c)
 		handleErr(err)
 
-		//println(pubkey.String())
-
-		// nonce
-		nonceStr := c.String("nonce")
-		if nonceStr == "" {
-			panic(errors.New("No nonce specified"))
-		}
-		nonceb, err := base64.StdEncoding.DecodeString(nonceStr)
-		handleErr(err)
-		nonce := new([24]byte)
-		for i, b := range nonceb {
-			nonce[i] = b
-		}
-		out := []byte{}
-		r, _ := pepper.BoxOpen(out, encrypted, nonce, &pubkey.Raw, &privkey.Raw)
-		fmt.Printf("%s\n", string(r))
+		decrypted, err := pepper.DecryptMsg(string(*msg), pubKey, privKey)
+		println(string(decrypted))
 	},
 }
 

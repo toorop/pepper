@@ -4,10 +4,8 @@ import (
 	//"bufio"
 	"bufio"
 	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/user"
@@ -190,10 +188,6 @@ var decmsg = cli.Command{
 			Name:  "pubkey, u",
 			Value: "",
 			Usage: "Peer public key",
-		}, cli.StringFlag{
-			Name:  "nonce, n",
-			Value: "",
-			Usage: "Nonce",
 		},
 	},
 	Action: func(c *cli.Context) {
@@ -234,12 +228,12 @@ var encfile = cli.Command{
 		}, cli.StringFlag{
 			Name:  "out, o",
 			Value: "",
-			Usage: "Path for encrypted file",
+			Usage: "Full path for encrypted file",
 		},
 	},
 	Action: func(c *cli.Context) {
 		var err error
-		// file to be encrypted
+		// input
 		in := c.String("in")
 		if in == "" {
 			dieError("You must provide a file to encrytp\npepper encfile -i FILE_TO_ENCRYPT [-o OUTPUT_FILE]")
@@ -253,33 +247,10 @@ var encfile = cli.Command{
 		if out == "" {
 			out = in + ".enc"
 		}
-		outdir := path.Dir(out)
-		if _, err = os.Stat(outdir); os.IsNotExist(err) {
-			dieError("no such file or directory: " + outdir)
-		}
-
-		// get keys
-		privkey, pubkey, err := getKeys(c)
+		privKey, pubKey, err := getKeys(c)
 		handleErr(err)
 
-		// New nonce
-		nonce := new([24]byte)
-		_, err = io.ReadFull(rand.Reader, nonce[:])
-		handleErr(err)
-
-		outb := []byte{}
-		inb, err := ioutil.ReadFile(in)
-		handleErr(err)
-
-		outb = pepper.BoxSeal(outb, inb, nonce, &pubkey.Raw, &privkey.Raw)
-		handleErr(ioutil.WriteFile(out, outb, 0644))
-
-		n := []byte{}
-		for _, b := range *nonce {
-			n = append(n, b)
-		}
-
-		fmt.Printf("Nonce: %s\n", base64.StdEncoding.EncodeToString(n))
+		handleErr(pepper.EncryptFile(in, out, pubKey, privKey))
 	},
 }
 
@@ -304,57 +275,26 @@ var decfile = cli.Command{
 		}, cli.StringFlag{
 			Name:  "out, o",
 			Value: "",
-			Usage: "Path for decrypted file",
-		}, cli.StringFlag{
-			Name:  "nonce, n",
-			Value: "",
-			Usage: "Nonce",
+			Usage: "Full path for decrypted file",
 		},
 	},
 	Action: func(c *cli.Context) {
-		var err error
-
-		nonceStr := c.String("nonce")
-		if nonceStr == "" {
-			dieError("You must provide a nonce\npepper decfile -i FILE_TO_ENCRYPT -n NONCE [-o OUTPUT_FILE]")
-		}
-		nonceb, err := base64.StdEncoding.DecodeString(nonceStr)
-		handleErr(err)
-		nonce := new([24]byte)
-		for i, b := range nonceb {
-			nonce[i] = b
-		}
-
+		// in
 		in := c.String("in")
 		if in == "" {
 			dieError("You must provide a file to decrypt\npepper decfile -i FILE_TO_ENCRYPT -n NONCE [-o OUTPUT_FILE]")
 		}
-		if _, err = os.Stat(in); os.IsNotExist(err) {
-			dieError("no such file or directory: " + in)
-		}
 
-		// output
+		// out
 		out := c.String("out")
 		if out == "" {
 			out = in + ".decrypted"
 		}
-		outdir := path.Dir(out)
-		if _, err = os.Stat(outdir); os.IsNotExist(err) {
-			dieError("no such file or directory: " + outdir)
-		}
 
 		// get keys
-		privkey, pubkey, err := getKeys(c)
+		privKey, pubKey, err := getKeys(c)
 		handleErr(err)
-
-		inb, err := ioutil.ReadFile(in)
-		handleErr(err)
-
-		outb := []byte{}
-		outb, _ = pepper.BoxOpen(outb, inb, nonce, &pubkey.Raw, &privkey.Raw)
-		handleErr(ioutil.WriteFile(out, outb, 0644))
-
-		println("Decrypted file saved as: " + out)
+		handleErr(pepper.DecryptFile(in, out, pubKey, privKey))
 	},
 }
 

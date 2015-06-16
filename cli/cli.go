@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"path"
 	"time"
 
@@ -106,7 +105,9 @@ var generateKey = cli.Command{
 		handleErr(err)
 
 		// save in ~/.pepper/key.priv|pub ?
-		u, err := user.Current()
+		homeDir, err := pepper.GetHomeDir()
+		handleErr(err)
+
 		handleErr(err)
 		var r []byte
 
@@ -124,7 +125,7 @@ var generateKey = cli.Command{
 		fmt.Printf("Public key: %s\n", pubKey)
 
 		for {
-			fmt.Printf("Would you like to save keys as your keys in %s ?\nWarning if keys exists they will be replaced (y/n) :", path.Join(u.HomeDir, ".pepper"))
+			fmt.Printf("Would you like to save keys as your keys in %s ?\nWarning if keys exists they will be replaced (y/n) :", path.Join(homeDir, ".pepper"))
 			r, _, _ = bufio.NewReader(os.Stdin).ReadLine()
 			if r[0] == 110 || r[0] == 121 {
 				break

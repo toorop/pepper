@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io/ioutil"
 	"os"
-	"os/user"
 	"path"
 )
 
@@ -36,12 +35,21 @@ func KeyFromHomeDir(puborpriv string) (key *Key, err error) {
 	if puborpriv != "private" && puborpriv != "public" {
 		return nil, errors.New("GetUserKeyFromHome params must be 'private' or 'public'. " + puborpriv + " given.")
 	}
-	u, err := user.Current()
+	// user.Current not implemented on OSX
+	//u, err := user.Current()
+	/*u, err := user.LookupId(strconv.FormatInt(int64(os.Getuid()), 10))
 	if err != nil {
 		return nil, err
 	}
+	println(u.HomeDir)
+	os.Exit(0)*/
+	homeDir, err := GetHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
 	// load public key
-	k, err := ioutil.ReadFile(path.Join(u.HomeDir, ".pepper", "key."+puborpriv))
+	k, err := ioutil.ReadFile(path.Join(homeDir, ".pepper", "key."+puborpriv))
 	if err != nil {
 		return nil, err
 	}
@@ -67,12 +75,17 @@ func (k *Key) String() string {
 
 // SaveInHomeDir save key in home dir
 func (k *Key) SaveInHomeDir() error {
-	u, err := user.Current()
+	/*u, err := user.Current()
+	if err != nil {
+		return err
+	}*/
+	homeDir, err := GetHomeDir()
 	if err != nil {
 		return err
 	}
+
 	// pepper dir exists ?
-	pepperDir := path.Join(u.HomeDir, ".pepper")
+	pepperDir := path.Join(homeDir, ".pepper")
 	if _, err := os.Stat(pepperDir); os.IsNotExist(err) {
 		if err = os.Mkdir(pepperDir, 0700); err != nil {
 			return err

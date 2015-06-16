@@ -2,6 +2,7 @@
 Because black boxes suck
 
 # TODO
-- [ ] local deamon & GUI 
+- [ ] local daemon & GUI 
 - [ ] public directory
+- [ ] storage (centralized)
 - [ ] transfert & storage (P2P)

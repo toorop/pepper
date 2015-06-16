@@ -2,7 +2,6 @@
 Because black boxes suck
 
 # TODO
-- [ ] refactoring
-- [ ] lib
-- [ ] user interface
-- [ ] master node
+- [ ] local deamon & GUI 
+- [ ] public directory
+- [ ] transfert & storage (P2P)

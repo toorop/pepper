@@ -126,7 +126,7 @@ var generateKey = cli.Command{
 		fmt.Printf("Public key: %s\n", pubKey)
 
 		for {
-			fmt.Printf("Would you like to save keys as your keys in %s/.pepper ?\nWarning if keys exists they will be replaced (y/n) :", u.HomeDir)
+			fmt.Printf("Would you like to save keys as your keys in %s ?\nWarning if keys exists they will be replaced (y/n) :", path.Join(u.HomeDir, ".pepper"))
 			r, _, _ = bufio.NewReader(os.Stdin).ReadLine()
 			if r[0] == 110 || r[0] == 121 {
 				break

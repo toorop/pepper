@@ -298,6 +298,59 @@ var decfile = cli.Command{
 	},
 }
 
+// Print user keys as string
+var dumpkeys = cli.Command{
+	Name:  "dumpkeys",
+	Usage: "Print user keys as string",
+	Action: func(c *cli.Context) {
+		pubKey, err := pepper.KeyFromHomeDir("public")
+		handleErr(err)
+		privKey, err := pepper.KeyFromHomeDir("private")
+		handleErr(err)
+		fmt.Printf("Public key:%s\nPrivate key:%s\n", pubKey, privKey)
+	},
+}
+
+// Save keys in user HOMEDIR/.pepper
+var savekeys = cli.Command{
+	Name:  "savekeys",
+	Usage: "Decrypt a file",
+	Flags: []cli.Flag{
+		cli.StringFlag{
+			Name:   "privkey, r",
+			Value:  "",
+			Usage:  "Your private key",
+			EnvVar: "PEPPER_PRIVATE_KEY",
+		}, cli.StringFlag{
+			Name:  "pubkey, u",
+			Value: "",
+			Usage: "Peer public key",
+		},
+	},
+	Action: func(c *cli.Context) {
+		// public key
+		pubstr := c.String("u")
+		if pubstr == "" {
+			dieError("public key is missing \npepper savekeys -u PUBLIC_KEY -r PRIVATE_KEY")
+		}
+
+		// private key
+		privstr := c.String("r")
+		if privstr == "" {
+			dieError("private key is missing \npepper savekeys -u PUBLIC_KEY -r PRIVATE_KEY")
+		}
+
+		pubKey, err := pepper.KeyFromString(pubstr)
+		handleErr(err)
+		pubKey.Type = "public"
+		privKey, err := pepper.KeyFromString(privstr)
+		handleErr(err)
+		privKey.Type = "private"
+		handleErr(pubKey.SaveInHomeDir())
+		handleErr(privKey.SaveInHomeDir())
+	},
+}
+
 func main() {
 	app := cli.NewApp()
 	app.Name = "pepper"
@@ -311,6 +364,8 @@ func main() {
 		decmsg,
 		encfile,
 		decfile,
+		dumpkeys,
+		savekeys,
 	}
 	app.Run(os.Args)
 }

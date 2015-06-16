@@ -23,9 +23,11 @@ func KeyFromString(kstr string) (*Key, error) {
 		panic(err)
 	}
 	k := &Key{}
-	for i, b := range kb {
-		k.Raw[i] = b
+	// check key lenght
+	if len(kb) != 32 {
+		return nil, errors.New("Bad key: " + kstr)
 	}
+	copy(k.Raw[:], kb)
 	return k, nil
 }
 

@@ -23,7 +23,7 @@ func handleErr(err error) {
 }
 
 func dieError(msg string) {
-	println(msg)
+	fmt.Println(msg)
 	os.Exit(1)
 }
 

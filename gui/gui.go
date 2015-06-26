@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -33,14 +34,18 @@ func main() {
 		assets = httpbox.HTTPBox()
 	}
 
+	// assets
 	router.Handler("GET", "/assets/*res", http.StripPrefix("/assets/", http.FileServer(assets)))
+
+	// index
+	router.HandlerFunc("GET", "/", handlerIndex)
 
 	// http server
 	n := negroni.New(negroni.NewRecovery())
 	n.UseHandler(router)
 	select {
 	case <-time.After(1 * time.Second):
-		browser.OpenURL("http://127.0.0.1:6480/ping")
+		browser.OpenURL("http://127.0.0.1:6480/")
 	}
 	log.Println("GUI HTTP server will be lanched on http://127.0.0.1:6480")
 	log.Fatalln(http.ListenAndServe("0.0.0.0:6480", n))
@@ -55,4 +60,13 @@ func wrapHandler(h func(http.ResponseWriter, *http.Request)) httprouter.Handle {
 		httpcontext.Set(r, "params", ps)
 		h(w, r)
 	}
+}
+
+func handlerIndex(w http.ResponseWriter, req *http.Request) {
+	file, err := assets.Open("index.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	io.Copy(w, file)
 }

@@ -22,3 +22,13 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+ENV
+bin/
+webbuilder
+clear.txt
+deploy
+cli/build
+watch
+encrypted.txt
+gui/build
